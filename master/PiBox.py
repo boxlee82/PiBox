@@ -2,7 +2,6 @@
 
 import thread  
 
-# 作者：Box Lee
 # 显示屏
 from datetime import *
 import time
@@ -13,6 +12,7 @@ import ImageDraw
 import ImageFont
 import os
 import unicodedata
+import traceback
 
 # 加载库文件
 import sys
@@ -180,17 +180,15 @@ def oled_display():
 
 	txt = today #unicode(today, 'UTF-8')
     
-    # 计算文本长度
+	# 计算文本长度，实现滚动跑马字
 	font_width, font_height = font.getsize(txt)
-    # 是否需要跑马灯  
+	# 是否需要跑马灯  
 	if font_width < 128:           
 	   draw.text((left, top), txt, font=font, fill=255)
 	else:
  	   txt += txt 
  	   text_left = int((time.time() * 35) % font_width)
 	   draw.text((-text_left, top), txt, font=font, fill=255)
-	#读取文本长度高度，可以实现滚动跑马字
-	# print font.getsize(txt)
 
 	top = top + 16
 	txt = unicode("温度：%.1f ℃" % temp, "UTF-8")
@@ -219,16 +217,12 @@ def oled_display():
 			(pressure / 100.0),
 			density
 			)
-
-		#if len(sys.argv) == 2 and sys.argv[1] == "debug":		
+	
 		print datetime.now().strftime('%H:%M:%S >> ') + txt
-
 		tts.raspberryTalk(txt)
 
 def start_oled():
 	while thread_run:
-		oled_display()
-
 		try:
 			oled_display()
 		except:
@@ -242,7 +236,6 @@ def thread_oled():
     thread.start_new_thread(start_oled, ())  
 
 		
-
 def start_led():
 	while thread_run:
 		try:
@@ -251,7 +244,7 @@ def start_led():
 		except:
 			print "led except: ", traceback.print_exc()
 
-		time.sleep(1)
+		time.sleep(0.5)
 
 
 # 读取传感器参数线程
@@ -347,23 +340,22 @@ def main():
 	try:
         # 继电器停止
 		GPIO.setup(GPIO_RELAY, GPIO.IN) 
+
+		# 启动 呼吸灯
+		thread_led()
         
 		# 读取传感器
 		load_sensor()
 		# 读取天气预报
 		get_caiyun()
+
 		# OLED 屏幕显示，附带整点报时
 		thread_oled()
-        
-		# 启动 呼吸灯
-		thread_led()
 
 		# 启动读取思科路由状态
 		thread_cisco()
-        
  		# 启动读取传感器参数线程
 		thread_sensor()       
-        
 		# 启动读取彩云天气
 		thread_caiyun()
 

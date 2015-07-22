@@ -94,7 +94,7 @@ class CISCO :
 
 					# print element, len(connection)
 
-	def main():
+	def main_1():
 		try:
 			while True:   
 				is_online()

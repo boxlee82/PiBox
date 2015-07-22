@@ -15,7 +15,7 @@ class TTS :
 				start = data.find('appId:"') + 7 
 				end = data.find('",rttAppId:') 
 				appid = data[start:end]
-				print appid
+				print "bing appId: " + appid
 				return appid
 		except urllib2.HTTPError, e:
 			print 'The server couldn\'t fulfill the request.'

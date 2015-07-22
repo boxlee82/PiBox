@@ -35,7 +35,7 @@ class CAIYUN :
     			start = data.find('&token=') + 7 
     			end = data.find('&random', start) 
     			token = data[start:end]
-    			# print token
+    			print "caiyun token: " + token
     			return token
     	except urllib2.HTTPError, e:
     		print 'The server couldn\'t fulfill the request.'
