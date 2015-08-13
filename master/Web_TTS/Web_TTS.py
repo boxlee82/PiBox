@@ -1,14 +1,28 @@
-﻿import sys, subprocess
+import sys, subprocess
 import hashlib
 import os
 import urllib, urllib2
 import hashlib
+import socket
 
 class TTS :
 
+	timeout = 10
+
 	def getAppId(self):
 		try:
-			f = urllib2.urlopen("http://www.bing.com/translator/dynamic/221008/js/LandingPage.js?loc=zh-CHS&phenabled=&rttenabled=&v=221008") 
+			version = "222083"
+			f = urllib2.urlopen("http://www.bing.com/translator/?mkt=zh-CN") 
+			t = f.headers["Content-type"]
+			if t.startswith("text/html;"):
+			    data = f.read() 
+			    start = data.find("/static/") + 8 
+			    end = data.find("/js/", start) 
+			    version = data[start:end]
+			print version
+
+			socket.setdefaulttimeout(self.timeout) # 10 秒钟后超时
+			f = urllib2.urlopen("http://www.bing.com/translator/dynamic/" + version + "/js/LandingPage.js?loc=zh-CHS&phenabled=&rttenabled=&v=" + version)
 			t = f.headers["Content-type"]
 			if t.startswith("application/x-javascript"):
 				data = f.read() 
@@ -47,6 +61,7 @@ class TTS :
 		#urllib.urlretrieve(url, filename)
 
 		try:
+			socket.setdefaulttimeout(self.timeout) # 10 秒钟后超时
 			f = urllib2.urlopen(url) 
 			t = f.headers["Content-type"]
 			if t.startswith("audio/"):
