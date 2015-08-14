@@ -81,16 +81,20 @@ class TTS :
 		return os.path.split(os.path.realpath(__file__))[0] + "/tts.mp3"
 		#return "Web_TTS/tts.mp3"
  
-	def raspberryTalk(self, text):
+	def raspberryTalk(self, text, volume = 10):
 		filename = os.path.split(os.path.realpath(__file__))[0] + "/cache/" + self.md5(text) + ".mp3"
 		# filename = "Web_TTS/cache/" + self.md5(text) + ".mp3"
 
 		if not os.path.exists(filename):
 			filename = self.downloadSpeech(text, filename)
 
+        # 区间 -200 至 10，推荐低音量数值 -25，高音量数值 10
+        # "volume=10"
+		str_volume = "volume=" + str(volume)
+
 		# This will call mplayer and will play the sound
 		# subprocess.call(["mplayer", getSpeech(text)], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		subprocess.call(["mplayer", filename], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		subprocess.call(["mplayer", "-af", str_volume, filename], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 	def alert(self):
 		# This will call mplayer and will play the sound
