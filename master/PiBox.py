@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-  
+# -*- coding: utf-8 -*-  
 
 import thread  
 
@@ -25,8 +25,10 @@ sys.setdefaultencoding("utf-8")
 from Adafruit_BMP085 import BMP085
 # 温度，湿度
 import Adafruit_DHT
-# PM2.5	
+import Adafruit_DHT.Raspberry_Pi_2 as platform
+# PM2.5
 import ZhyuIoT_GP2Y10
+import ZhyuIoT_GP2Y10.Raspberry_Pi as gp2y10
 # 发音单元
 sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/Web_TTS")
 from Web_TTS import TTS
@@ -45,7 +47,7 @@ import RPi.GPIO as GPIO
 
 # 初始化语音引擎
 tts = TTS()
-chinese_week = [ "周一", "周二", "周三", "周四", "周五", "周六", "周日" ]
+chinese_week = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
 # 初始化 led 控制单元
 led = RGBLED(26, 13, 19)
@@ -74,27 +76,6 @@ bmp = BMP085(0x77)
 sensor = Adafruit_DHT.DHT22
 pin = 4
 
-# 128x64 display with hardware SPI:
-disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST, dc=DC, spi=SPI.SpiDev(SPI_PORT, SPI_DEVICE, max_speed_hz=8000000))
-
-# Initialize library.
-disp.begin()
-
-# Clear display.
-disp.clear()
-
-# 显示内容
-# Create blank image for drawing.
-# Make sure to create image with mode '1' for 1-bit color.
-width = disp.width
-height = disp.height
-image = Image.new('1', (width, height))
-
-# Get drawing object to draw on image.
-draw = ImageDraw.Draw(image)
-
-# Load default font.
-font = ImageFont.truetype(os.path.split(os.path.realpath(__file__))[0] + "/simsun.ttf", 12)
 
 # 全局变量 传感器参数
 humidity = 0.0
@@ -112,6 +93,15 @@ thread_run = True
 attemp_hour = -1
 
 
+# 按时间段控制播报音量
+# 晚上 10 点 - 早上 8 点前，播报音量 30%；白天音量大
+def volume_with_time():
+    time_hour = datetime.now().hour
+    if ((time_hour < 8) or (time_hour > 22)):
+        return -25
+    else:
+        return 10
+
 def cleanup():
     # 释放资源，不然下次运行是可能会收到警告
     print('clean up')
@@ -126,15 +116,16 @@ def load_sensor():
 	# 每 2 秒读一次
 	# 读取 dht 湿度，温度；bmp085 温度，气压
 	if (time_now - attemp_DHT).seconds > 10:
-		humidity, temperature = Adafruit_DHT.read_retry(sensor, pin)	# 时间间隔两秒
+		attemp_DHT = time_now
+		# humidity, temperature = Adafruit_DHT.read_retry(sensor, pin) # 时间间隔两秒
+		# adafruit dht 库有问题，反复执行 pi_version 函数，open('/proc/cpuinfo', 'r') 会导致出错
+		humidity, temperature = Adafruit_DHT.read_retry(sensor, pin, 15, 2, platform)	# 时间间隔两秒
 		temp = (bmp.readTemperature() + temperature) / 2
 		pressure = bmp.readPressure()
-		attemp_DHT = time_now
 	# 读取 pm2.5浓度，每 5 秒读一次
 	if (time_now - attemp_GP2Y10).seconds > 30:
-		density = ZhyuIoT_GP2Y10.read(ZhyuIoT_GP2Y10.GP2Y1051A, 5)	# if density is None:	attemp = 1	ATTEMPS = 5
 		attemp_GP2Y10 = time_now
-
+		density = ZhyuIoT_GP2Y10.read(ZhyuIoT_GP2Y10.GP2Y1051A, 5, gp2y10)	# if density is None: attemp = 1 ATTEMPS = 5
 def start_sensor():
 	while thread_run:
 		try:
@@ -149,6 +140,27 @@ def thread_sensor():
     thread.start_new_thread(start_sensor, ())  
 
 
+
+# 128x64 display with hardware SPI:
+disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST, dc=DC, spi=SPI.SpiDev(SPI_PORT, SPI_DEVICE, max_speed_hz=8000000))
+# Initialize library.
+disp.begin()
+# Clear display.
+disp.clear()
+
+# 显示内容
+# Create blank image for drawing.
+# Make sure to create image with mode '1' for 1-bit color.
+width = disp.width
+height = disp.height
+image = Image.new('1', (width, height))
+# Get drawing object to draw on image.
+draw = ImageDraw.Draw(image)
+
+# Load default font.
+font = ImageFont.truetype(os.path.split(os.path.realpath(__file__))[0] + "/simsun.ttf", 12)
+
+
 # OLED 显示
 def oled_display():
 	global humidity, temperature, density, temp, pressure
@@ -156,34 +168,33 @@ def oled_display():
 	global cisco_text, cisco_time
 	global caiyun_text    
 
-	image = Image.new('1', (width, height))
-	# Get drawing object to draw on image.
-	draw = ImageDraw.Draw(image)
+	datetime_now = datetime.now()
 
 	padding = 0
-	top = padding
-	left = padding
+	top = 0
+	left = 0
 
-	datetime_now = datetime.now()
+	# Clear image buffer by drawing a black filled box.
+	draw.rectangle((0,0,width,height), outline=0, fill=0)
 
 	if (datetime_now - cisco_time).seconds < 20:
 		# 显示路由器提示信息
 		today = cisco_text
 		today = unicode(today, 'UTF-8')
 	else:
-        # 显示时间
+        		# 显示时间
 		today = datetime_now.strftime('%m月%d日 %H:%M:%S') + " " + chinese_week[datetime_now.weekday()]
 		today = unicode(today, 'UTF-8')
-        # 显示天气
+        		# 显示天气
 		if len(caiyun_text) > 0:
 		  today += " " + unicode(caiyun_text, 'UTF-8') + "\n\n"      
 
-	txt = today #unicode(today, 'UTF-8')
+	txt = today 
     
 	# 计算文本长度，实现滚动跑马字
 	font_width, font_height = font.getsize(txt)
-	# 是否需要跑马灯  
-	if font_width < 128:           
+	# 文字小于 128 像素，无需执行跑马灯
+	if font_width < width:           
 	   draw.text((left, top), txt, font=font, fill=255)
 	else:
  	   txt += txt 
@@ -208,18 +219,16 @@ def oled_display():
 
 	if attemp_hour != datetime_now.hour:
 		attemp_hour = datetime_now.hour
-		txt = '现在时间 %s %s，%s, 温度%.1f摄氏度，湿度百分之%.1f ，气压%.1f帕，PM2.5浓度%.1f微克每立方米' % (
-			datetime.now().strftime('%H:%M'), 
+		txt = '现在时间 %s %s，%s, 温度%.1f摄氏度，湿度百分之%.1f ，气压%.1f帕，PM2.5浓度%.1f微克每立方米' % (datetime.now().strftime('%H:%M'), 
 			chinese_week[datetime.now().weekday()],
 			caiyun_text,
 			temp,
 			humidity,
 			(pressure / 100.0),
-			density
-			)
+			density)
 	
 		print datetime.now().strftime('%H:%M:%S >> ') + txt
-		tts.raspberryTalk(txt)
+		tts.raspberryTalk(txt, volume_with_time())
 
 def start_oled():
 	while thread_run:
@@ -282,13 +291,13 @@ def cisco_callback(friendlyName, userDeviceName, new_status):
 		led.setLight(0x00ff00, 20) 
 		txt = friendlyName + " 走了"
 	
-	# 屏幕提示 
+	# 屏幕提示
 	cisco_text = txt
 	cisco_time = datetime.now()
 
 	# 语音提示
 	print datetime.now().strftime('%H:%M:%S >> ') + txt
-	tts.raspberryTalk(txt)
+	tts.raspberryTalk(txt, volume_with_time())
     
     # 继电器停止
 	GPIO.setup(GPIO_RELAY, GPIO.IN)    
@@ -311,7 +320,8 @@ def get_caiyun():
 
 	try:
 		caiyun_rain = caiyun.getRain()
-		caiyun_text = "" + caiyun.getSummary(lonlat) #.replace('还在加班么？注意休息哦', '').replace('，放心出门吧', '').replace('公里外呢', '公里外').replace('。', '')
+		caiyun_text = "" + caiyun.getSummary(lonlat) #.replace('还在加班么？注意休息哦', '').replace('，放心出门吧', '').replace('公里外呢',
+                                               #'公里外').replace('。', '')
 		# 转换统一格式
 		caiyun_text = str(caiyun_text)
 
@@ -322,7 +332,7 @@ def get_caiyun():
 			# print type("天气预警："), len("天气预警："), "天气预警："
 
 			print datetime.now().strftime('%H:%M:%S >> ') + txt
-			tts.raspberryTalk(txt)
+			tts.raspberryTalk(txt, volume_with_time())
 	except:
 		print "caiyun except: ", traceback.print_exc()
 
